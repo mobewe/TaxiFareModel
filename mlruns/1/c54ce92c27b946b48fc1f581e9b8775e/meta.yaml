@@ -1,0 +1,15 @@
+artifact_uri: file:///home/moritz/code/mobewe/TaxiFareModel/mlruns/1/c54ce92c27b946b48fc1f581e9b8775e/artifacts
+end_time: null
+entry_point_name: ''
+experiment_id: '1'
+lifecycle_stage: active
+name: ''
+run_id: c54ce92c27b946b48fc1f581e9b8775e
+run_uuid: c54ce92c27b946b48fc1f581e9b8775e
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1645535951683
+status: 1
+tags: []
+user_id: unknown
