@@ -1,5 +1,5 @@
 from TaxiFareModel.data import get_data
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Lasso
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import Pipeline
@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split
 from memoized_property import memoized_property
 import mlflow
 from  mlflow.tracking import MlflowClient
+import joblib
 
 class Trainer():
 
@@ -24,7 +25,7 @@ class Trainer():
         self.y = y
         self.experiment_name = "[GER] [MUC] [moritzbewerunge] TaxiFareModel_783"
 
-    def set_pipeline(self):
+    def set_pipeline(self,estimator):
         '''returns a pipelined model'''
         dist_pipe = Pipeline([
             ('dist_trans', DistanceTransformer()),
@@ -40,13 +41,13 @@ class Trainer():
         ], remainder="drop")
         pipe = Pipeline([
             ('preproc', preproc_pipe),
-            ('linear_model', LinearRegression())
+            ('linear_model', estimator)
         ])
         return pipe
 
-    def run(self):
+    def run(self,estimator):
         """set and train the pipeline"""
-        self.pipeline = self.set_pipeline().fit(self.X,self.y)
+        self.pipeline = self.set_pipeline(estimator).fit(self.X,self.y)
         return self.pipeline
 
     def evaluate(self, X_test, y_test):
@@ -56,6 +57,7 @@ class Trainer():
         print(f"The root mean squared error is: {rmse}")
         return rmse
 
+    # MLFLOW CLIENT
     @memoized_property
     def mlflow_client(self):
         MLFLOW_URI = "https://mlflow.lewagon.co/"
@@ -79,6 +81,11 @@ class Trainer():
     def mlflow_log_metric(self, key, value):
         self.mlflow_client.log_metric(self.mlflow_run.info.run_id, key, value)
 
+    # Saving the Model
+    def save_model(self):
+        """ Save the trained model into a model.joblib file """
+        joblib.dump(self.pipeline, 'model.joblib')
+
 
 if __name__ == "__main__":
     # get data
@@ -91,16 +98,24 @@ if __name__ == "__main__":
     # hold out
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.15)
     # train
-    trainer = Trainer(X_train,y_train)
-    trainer.run()
-    # evaluate
-    evaluated_model = trainer.evaluate(X_val,y_val)
 
-    trainer.mlflow_log_metric("rmse", evaluated_model)
-    trainer.mlflow_log_param("model", "Logistic Regression")
-    trainer.mlflow_log_param("student_name", trainer.experiment_name)
+    LinReg = LinearRegression()
+    Lass = Lasso()
+    estimators = [LinReg, Lass]
+
+    for estimator in estimators:
+        trainer = Trainer(X_train,y_train)
+        trainer.run(estimator)
+        trainer.save_model()
+        # evaluate
+
+        evaluated_model = trainer.evaluate(X_val,y_val)
+
+        trainer.mlflow_log_metric("rmse", evaluated_model)
+        trainer.mlflow_log_param("model", estimator)
+        trainer.mlflow_log_param("student_name", trainer.experiment_name)
+
+
 
     experiment_id = trainer.mlflow_experiment_id
     print(f"experiment URL: https://mlflow.lewagon.co/#/experiments/{experiment_id}")
-
-    print('TODO')
