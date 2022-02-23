@@ -1,17 +1,20 @@
-from TaxiFareModel.data import get_data
 from sklearn.linear_model import LinearRegression, Lasso
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from TaxiFareModel.encoders import TimeFeaturesEncoder, DistanceTransformer
-from TaxiFareModel.utils import compute_rmse
-from TaxiFareModel.data import clean_data
+from TFM_TrainAtScalePipeline.encoders import TimeFeaturesEncoder, DistanceTransformer
+from TFM_TrainAtScalePipeline.utils import compute_rmse
+from TFM_TrainAtScalePipeline.data import get_data, clean_data, df_optimized
 from sklearn.model_selection import train_test_split
 from memoized_property import memoized_property
 import mlflow
 from  mlflow.tracking import MlflowClient
 import joblib
+from google.cloud import storage
+from TFM_TrainAtScalePipeline.params import BUCKET_NAME , STORAGE_LOCATION
+
+from sklearn.preprocessing import FunctionTransformer
 
 class Trainer():
 
@@ -25,7 +28,7 @@ class Trainer():
         self.y = y
         self.experiment_name = "[GER] [MUC] [moritzbewerunge] TaxiFareModel_783"
 
-    def set_pipeline(self,estimator):
+    def set_pipeline(self,estimator,transformer):
         '''returns a pipelined model'''
         dist_pipe = Pipeline([
             ('dist_trans', DistanceTransformer()),
@@ -39,15 +42,19 @@ class Trainer():
             ('distance', dist_pipe, ["pickup_latitude", "pickup_longitude", 'dropoff_latitude', 'dropoff_longitude']),
             ('time', time_pipe, ['pickup_datetime'])
         ], remainder="drop")
-        pipe = Pipeline([
+        reduced_pipe = Pipeline([
             ('preproc', preproc_pipe),
+            ('reduced_size', transformer)
+        ])
+        pipe = Pipeline([
+            ('preproc', reduced_pipe),
             ('linear_model', estimator)
         ])
         return pipe
 
-    def run(self,estimator):
+    def run(self,estimator,transformer):
         """set and train the pipeline"""
-        self.pipeline = self.set_pipeline(estimator).fit(self.X,self.y)
+        self.pipeline = self.set_pipeline(estimator,transformer).fit(self.X,self.y)
         return self.pipeline
 
     def evaluate(self, X_test, y_test):
@@ -86,15 +93,26 @@ class Trainer():
         """ Save the trained model into a model.joblib file """
         joblib.dump(self.pipeline, 'model.joblib')
 
+        # Implement here
+        client = storage.Client()
+
+        bucket = client.bucket(BUCKET_NAME)
+
+        blob = bucket.blob(STORAGE_LOCATION)
+
+        blob.upload_from_filename('model.joblib')
+        print(f"uploaded model.joblib to gcp cloud storage under \n => {STORAGE_LOCATION}")
 
 if __name__ == "__main__":
     # get data
     df = get_data()
     # clean data
     df_cleaned = clean_data(df)
+    # reduce size
+    df_reduced = df_optimized(df_cleaned)
     # set X and y
-    y = df_cleaned["fare_amount"]
-    X = df_cleaned.drop("fare_amount", axis=1)
+    y = df_reduced["fare_amount"]
+    X = df_reduced.drop("fare_amount", axis=1)
     # hold out
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.15)
     # train
@@ -102,10 +120,11 @@ if __name__ == "__main__":
     LinReg = LinearRegression()
     Lass = Lasso()
     estimators = [LinReg, Lass]
+    transformer = FunctionTransformer(df_optimized, validate=False)
 
     for estimator in estimators:
         trainer = Trainer(X_train,y_train)
-        trainer.run(estimator)
+        trainer.run(estimator,transformer)
         trainer.save_model()
         # evaluate
 

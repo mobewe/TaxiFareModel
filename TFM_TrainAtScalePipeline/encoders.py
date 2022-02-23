@@ -1,6 +1,7 @@
 from sklearn.base import BaseEstimator, TransformerMixin
-from TaxiFareModel.utils import haversine_vectorized
+from TFM_TrainAtScalePipeline.utils import haversine_vectorized
 import pandas as pd
+from TFM_TrainAtScalePipeline.data import df_optimized
 
 
 class TimeFeaturesEncoder(BaseEstimator, TransformerMixin):
