@@ -56,3 +56,19 @@ class DistanceTransformer(BaseEstimator, TransformerMixin):
             end_lon=self.end_lon
         )
         return X_[['distance']]
+
+class OptimizeSize(BaseEstimator, TransformerMixin):
+
+    def __init__(self, verbose=False):
+        self.verbose = verbose
+
+    def transform(self, X, y=None):
+        X = pd.DataFrame(X.toarray())
+        assert isinstance(X, pd.DataFrame)
+        X = df_optimized(X)
+        if self.verbose:
+            print(X.head())
+        return X
+
+    def fit(self, X, y=None):
+        return self

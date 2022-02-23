@@ -3,7 +3,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from TFM_TrainAtScalePipeline.encoders import TimeFeaturesEncoder, DistanceTransformer
+from TFM_TrainAtScalePipeline.encoders import TimeFeaturesEncoder, DistanceTransformer, OptimizeSize
 from TFM_TrainAtScalePipeline.utils import compute_rmse
 from TFM_TrainAtScalePipeline.data import get_data, clean_data, df_optimized
 from sklearn.model_selection import train_test_split
@@ -13,8 +13,6 @@ from  mlflow.tracking import MlflowClient
 import joblib
 from google.cloud import storage
 from TFM_TrainAtScalePipeline.params import BUCKET_NAME , STORAGE_LOCATION
-
-from sklearn.preprocessing import FunctionTransformer
 
 class Trainer():
 
@@ -28,7 +26,7 @@ class Trainer():
         self.y = y
         self.experiment_name = "[GER] [MUC] [moritzbewerunge] TaxiFareModel_783"
 
-    def set_pipeline(self,estimator,transformer):
+    def set_pipeline(self,estimator):
         '''returns a pipelined model'''
         dist_pipe = Pipeline([
             ('dist_trans', DistanceTransformer()),
@@ -44,7 +42,7 @@ class Trainer():
         ], remainder="drop")
         reduced_pipe = Pipeline([
             ('preproc', preproc_pipe),
-            ('reduced_size', transformer)
+            ('reduced_size', OptimizeSize())
         ])
         pipe = Pipeline([
             ('preproc', reduced_pipe),
@@ -52,9 +50,9 @@ class Trainer():
         ])
         return pipe
 
-    def run(self,estimator,transformer):
+    def run(self,estimator):
         """set and train the pipeline"""
-        self.pipeline = self.set_pipeline(estimator,transformer).fit(self.X,self.y)
+        self.pipeline = self.set_pipeline(estimator).fit(self.X,self.y)
         return self.pipeline
 
     def evaluate(self, X_test, y_test):
@@ -120,11 +118,10 @@ if __name__ == "__main__":
     LinReg = LinearRegression()
     Lass = Lasso()
     estimators = [LinReg, Lass]
-    transformer = FunctionTransformer(df_optimized, validate=False)
 
     for estimator in estimators:
         trainer = Trainer(X_train,y_train)
-        trainer.run(estimator,transformer)
+        trainer.run(estimator)
         trainer.save_model()
         # evaluate
 
